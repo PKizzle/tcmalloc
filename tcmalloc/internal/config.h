@@ -115,16 +115,17 @@ GOOGLE_MALLOC_SECTION_BEGIN
 namespace tcmalloc {
 namespace tcmalloc_internal {
 
-// kAddressBits is the compile-time maximum virtual address space size.
-// It is used to size data structures (page maps, bitfields) that must
-// accommodate all possible addresses.  On architectures where the actual
-// virtual address space may be smaller (e.g. aarch64 with 3-level page
-// tables giving only 39 bits), the runtime-detected EffectiveAddressBits()
-// from address_bits.h is used for mmap hints and memory tagging.
+// kMaxAddressBits is the compile-time maximum virtual address space size.
+// It is used **only** for sizing data structures (page maps, bitfields,
+// arrays) that must accommodate all possible addresses at compile time.
+//
+// All runtime code paths must use EffectiveAddressBits() from
+// address_bits.h, which detects the actual VA size (e.g. 39-bit on
+// aarch64 with 3-level page tables vs. 48-bit with 4-level page tables).
 //
 // Users may override this at build time by defining TCMALLOC_ADDRESS_BITS.
 #if defined(TCMALLOC_ADDRESS_BITS)
-inline constexpr int kAddressBits = TCMALLOC_ADDRESS_BITS;
+inline constexpr int kMaxAddressBits = TCMALLOC_ADDRESS_BITS;
 #elif defined __x86_64__
 // x86_64 processors use lower 48 bits in virtual to physical address
 // translation with 4-level page tables. The top 16 are thus unused.
@@ -132,24 +133,24 @@ inline constexpr int kAddressBits = TCMALLOC_ADDRESS_BITS;
 // TODO(b/134686025): Under what operating systems can we increase it safely to
 // 17? This lets us use smaller page maps.  On first allocation, a 36-bit page
 // map uses only 96 KB instead of the 4.5 MB used by a 52-bit page map.
-inline constexpr int kAddressBits = 48;
+inline constexpr int kMaxAddressBits = 48;
 #elif defined __powerpc64__ && defined __linux__
 // Linux(4.12 and above) on powerpc64 supports 128TB user virtual address space
 // by default, and up to 512TB if user space opts in by specifying hint in mmap.
 // See comments in arch/powerpc/include/asm/processor.h
 // and arch/powerpc/mm/mmap.c.
-inline constexpr int kAddressBits = 49;
+inline constexpr int kMaxAddressBits = 49;
 #elif defined __aarch64__ && defined __linux__
 // According to Documentation/arm64/memory.txt of kernel 3.16,
 // AARCH64 kernel supports up to 48-bit virtual addresses for both user and
 // kernel with 4-level page tables.  Kernels with CONFIG_PGTABLE_LEVELS=3
 // only support 39-bit addresses; EffectiveAddressBits() detects this at
 // runtime.
-inline constexpr int kAddressBits = 48;
+inline constexpr int kMaxAddressBits = 48;
 #elif defined __riscv && defined __linux__
-inline constexpr int kAddressBits = 48;
+inline constexpr int kMaxAddressBits = 48;
 #else
-inline constexpr int kAddressBits = 8 * sizeof(void*);
+inline constexpr int kMaxAddressBits = 8 * sizeof(void*);
 #endif
 
 #if defined(ABSL_HAVE_ADDRESS_SANITIZER) ||   \

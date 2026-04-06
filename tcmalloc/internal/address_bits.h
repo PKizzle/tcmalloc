@@ -32,9 +32,9 @@ namespace tcmalloc_internal {
 // 48 bits are available.  This function detects the actual size at runtime by
 // inspecting /proc/self/maps, with a fallback to mmap probing.
 //
-// On other architectures, returns kAddressBits (the compile-time constant).
+// On other architectures, returns kMaxAddressBits (the compile-time constant).
 //
-// The returned value is always <= kAddressBits.
+// The returned value is always <= kMaxAddressBits.
 ABSL_ATTRIBUTE_PURE_FUNCTION int EffectiveAddressBits();
 
 }  // namespace tcmalloc_internal

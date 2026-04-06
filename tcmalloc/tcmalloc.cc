@@ -97,6 +97,7 @@
 #include "tcmalloc/global_stats.h"
 #include "tcmalloc/guarded_allocations.h"
 #include "tcmalloc/guarded_page_allocator.h"
+#include "tcmalloc/internal/address_bits.h"
 #include "tcmalloc/internal/allocation_guard.h"
 #include "tcmalloc/internal/config.h"
 #include "tcmalloc/internal/logging.h"
@@ -745,8 +746,14 @@ bool CorrectSize(const void* ptr, size_t size, Policy policy);
 
 bool CorrectAlignment(void* ptr, std::align_val_t alignment);
 
-static constexpr uintptr_t kBadDeallocationHighMask =
-    ~((uintptr_t{1} << kAddressBits) - 1u);
+// Bad deallocation high mask: computed from the runtime-detected VA size.
+// On a 48-bit system this is 0xFFFF000000000000, on 39-bit it is
+// 0xFFFFFF8000000000.  Cached in DeallocMasks for hot-path performance.
+static uintptr_t BadDeallocationHighMask() {
+  const int bits = EffectiveAddressBits();
+  if (bits >= 8 * static_cast<int>(sizeof(void*))) return 0;
+  return ~((uintptr_t{1} << bits) - 1u);
+}
 static constexpr uintptr_t kBadAlignmentMask =
     static_cast<uintptr_t>(kAlignment) - 1u;
 
@@ -757,6 +764,7 @@ static_assert((static_cast<uintptr_t>(MemoryTag::kNormal) &
 // size.  They are computed once on first use so that the free() hot path
 // remains fast (one atomic flag check + struct loads from L1 cache).
 struct DeallocMasks {
+  uintptr_t bad_dealloc_high_mask;
   uintptr_t normal_mask;
   uintptr_t cold_mask;
   uintptr_t normal_or_bad_deallocation_mask;
@@ -769,15 +777,17 @@ static const DeallocMasks& GetDeallocMasks() {
   absl::base_internal::LowLevelCallOnce(&flag, [&]() {
     const uintptr_t tag_shift = EffectiveTagShift();
     const uintptr_t tag_mask = EffectiveTagMask();
+    const uintptr_t bad_high = BadDeallocationHighMask();
+    masks.bad_dealloc_high_mask = bad_high;
     // kNormalMask covers both kNormal and kNormalP1 because they share an
     // overlapping tag bit.  This is the same property IsNormalMemory relies on.
     masks.normal_mask =
         static_cast<uintptr_t>(MemoryTag::kNormal) << tag_shift;
     masks.cold_mask = static_cast<uintptr_t>(MemoryTag::kCold) << tag_shift;
     masks.normal_or_bad_deallocation_mask =
-        kBadDeallocationHighMask | masks.normal_mask | kBadAlignmentMask;
+        bad_high | masks.normal_mask | kBadAlignmentMask;
     masks.tag_or_bad_deallocation_mask =
-        kBadDeallocationHighMask | tag_mask | kBadAlignmentMask;
+        bad_high | tag_mask | kBadAlignmentMask;
   });
   return masks;
 }
@@ -786,8 +796,9 @@ template <typename Policy>
 ABSL_ATTRIBUTE_NOINLINE static void do_unsized_free_irregular(void* ptr,
                                                               Policy policy) {
   const uintptr_t uptr = absl::bit_cast<uintptr_t>(ptr);
+  const auto& dm = GetDeallocMasks();
 
-  if (ABSL_PREDICT_FALSE(uptr & kBadDeallocationHighMask)) {
+  if (ABSL_PREDICT_FALSE(uptr & dm.bad_dealloc_high_mask)) {
     ReportCorruptedFree(tc_globals, ptr);
   }
   // kNormal allocations should not be misaligned.  GWP-ASan may deliberately
@@ -853,7 +864,8 @@ ABSL_ATTRIBUTE_NOINLINE static void handle_sampled_or_illformed_ptrs(
   // illformed.
   auto tag = GetMemoryTag(ptr);
   const uintptr_t uptr = absl::bit_cast<uintptr_t>(ptr);
-  TC_ASSERT((uptr & (kBadAlignmentMask | kBadDeallocationHighMask)) != 0 ||
+  const auto& dm2 = GetDeallocMasks();
+  TC_ASSERT((uptr & (kBadAlignmentMask | dm2.bad_dealloc_high_mask)) != 0 ||
             (tag != MemoryTag::kNormal && tag != MemoryTag::kNormalP1 &&
              tag != MemoryTag::kCold));
 
@@ -863,7 +875,7 @@ ABSL_ATTRIBUTE_NOINLINE static void handle_sampled_or_illformed_ptrs(
   }
   // At this point, the pointer is purely illformed: wrong alignment, corrupted
   // high bits, or illegal tags.
-  if (ABSL_PREDICT_FALSE(uptr & kBadDeallocationHighMask)) {
+  if (ABSL_PREDICT_FALSE(uptr & dm2.bad_dealloc_high_mask)) {
     ReportCorruptedFree(tc_globals, ptr);
   }
 
@@ -1190,7 +1202,7 @@ using tcmalloc::tcmalloc_internal::do_malloc_stats;
 using tcmalloc::tcmalloc_internal::do_malloc_trim;
 using tcmalloc::tcmalloc_internal::do_mallopt;
 using tcmalloc::tcmalloc_internal::GetThreadSampler;
-using tcmalloc::tcmalloc_internal::kBadDeallocationHighMask;
+using tcmalloc::tcmalloc_internal::GetDeallocMasks;
 using tcmalloc::tcmalloc_internal::MallocPolicy;
 using tcmalloc::tcmalloc_internal::ReportCorruptedFree;
 using tcmalloc::tcmalloc_internal::tc_globals;
@@ -1622,7 +1634,7 @@ extern "C" ABSL_CACHELINE_ALIGNED void* TCMallocInternalRealloc(
     return fast_alloc(size, MallocPolicy());
   }
   const uintptr_t uptr = absl::bit_cast<uintptr_t>(ptr);
-  if (ABSL_PREDICT_FALSE(uptr & kBadDeallocationHighMask)) {
+  if (ABSL_PREDICT_FALSE(uptr & GetDeallocMasks().bad_dealloc_high_mask)) {
     ReportCorruptedFree(tc_globals, ptr);
   }
   if (size == 0) {

@@ -26,6 +26,7 @@
 #include "absl/strings/string_view.h"
 #include "tcmalloc/common.h"
 #include "tcmalloc/huge_pages.h"
+#include "tcmalloc/internal/address_bits.h"
 #include "tcmalloc/internal/config.h"
 #include "tcmalloc/internal/logging.h"
 #include "tcmalloc/pages.h"
@@ -194,7 +195,7 @@ void PageAllocInfo::Print(Printer& out) const {
     print_counts(small_[i.raw_num()], n, n);
   }
 
-  for (int i = 0; i < kAddressBits - kPageShift; ++i) {
+  for (int i = 0; i < EffectiveAddressBits() - kPageShift; ++i) {
     const Length nmax = Length(uintptr_t{1} << i);
     const Length nmin = nmax / 2 + Length(1);
     print_counts(large_[i], nmin, nmax);
@@ -253,7 +254,7 @@ void PageAllocInfo::PrintInPbtxt(PbtxtRegion& region,
     print_counts(small_[i.raw_num()], n, n);
   }
 
-  for (int i = 0; i < kAddressBits - kPageShift; ++i) {
+  for (int i = 0; i < EffectiveAddressBits() - kPageShift; ++i) {
     const Length nmax = Length(uintptr_t(1) << i);
     const Length nmin = nmax / 2 + Length(1);
     print_counts(large_[i], nmin, nmax);

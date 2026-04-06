@@ -26,7 +26,7 @@ TEST(AddressBits, EffectiveAddressBitsInRange) {
   const int bits = EffectiveAddressBits();
 
   // Must not exceed the compile-time maximum.
-  EXPECT_LE(bits, kAddressBits);
+  EXPECT_LE(bits, kMaxAddressBits);
 
   // Must be at least as large as the minimum reasonable VA size for 64-bit
   // systems.  On aarch64, the minimum is 39 (3-level page tables with 4KB
@@ -43,8 +43,8 @@ TEST(AddressBits, ConsistentAcrossCalls) {
 
 #if defined(__x86_64__)
 TEST(AddressBits, X86ReturnsCompileTimeConstant) {
-  // On x86_64, the runtime detection is a no-op and should return kAddressBits.
-  EXPECT_EQ(EffectiveAddressBits(), kAddressBits);
+  // On x86_64, the runtime detection is a no-op and should return kMaxAddressBits.
+  EXPECT_EQ(EffectiveAddressBits(), kMaxAddressBits);
 }
 #endif
 

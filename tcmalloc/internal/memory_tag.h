@@ -43,14 +43,16 @@ enum class MemoryTag : uint8_t {
   kMetadata = 0x3,
 };
 
-// Compile-time tag constants, used for data structure sizing.  These reflect
-// the maximum kAddressBits and are correct on systems with full-size VA space.
-inline constexpr uintptr_t kTagShift = std::min(kAddressBits - 4, 42);
+// Compile-time tag constants, used only for data structure sizing.
+// These reflect the maximum kMaxAddressBits and are correct on systems
+// with full-size VA space.  All runtime code must use the Effective*
+// functions below.
+inline constexpr uintptr_t kTagShift = std::min(kMaxAddressBits - 4, 42);
 inline constexpr uintptr_t kTagMask =
     uintptr_t{kSanitizerAddressSpace ? 0x3 : 0x7} << kTagShift;
 
 // Runtime-effective tag configuration, accounting for the actual virtual
-// address space size (which may be smaller than kAddressBits on aarch64
+// address space size (which may be smaller than kMaxAddressBits on aarch64
 // systems with 3-level page tables).
 struct TagConfig {
   uintptr_t shift;

@@ -282,7 +282,7 @@ class ABSL_CACHELINE_ALIGNED Span final : public SpanList::Elem {
   static constexpr size_t kMaxCacheBits = 4;
   static_assert(kCacheSize <= (1 << kMaxCacheBits) - 1);
 
-  static constexpr size_t kMaxPageIdBits = kAddressBits - kPageShift;
+  static constexpr size_t kMaxPageIdBits = kMaxAddressBits - kPageShift;
   static constexpr size_t kReservedBits = 24;
   // Use uint16_t or uint8_t for 16 bit and 8 bit fields instead of bitfields.
   // LLVM will generate widen load/store and bit masking operations to access

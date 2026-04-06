@@ -283,8 +283,8 @@ inline void CheckEffectiveAddressBits(uintptr_t ptr) {
   }
 }
 
-static_assert(kAddressBits <= 8 * sizeof(void*),
-              "kAddressBits must be smaller than the pointer size");
+static_assert(kMaxAddressBits <= 8 * sizeof(void*),
+              "kMaxAddressBits must be smaller than the pointer size");
 
 // Rounds size down to a multiple of alignment.
 inline size_t RoundDown(const size_t size, const size_t alignment) {
@@ -608,7 +608,7 @@ void* SystemAllocator<Topology, NormalPartitions>::MmapAlignedLocked(
         "%u-bit virtual address space size; you may need to rebuild TCMalloc "
         "with TCMALLOC_ADDRESS_BITS defined to your system's virtual address "
         "space size (detected effective bits: %d)",
-        kAddressBits, EffectiveAddressBits());
+        kMaxAddressBits, EffectiveAddressBits());
   }
   return nullptr;
 }

@@ -161,12 +161,12 @@ int DetectVirtualAddressBits() {
 #if defined(__aarch64__) && defined(__linux__)
   int bits = DetectFromProcMaps();
   if (bits > 0) {
-    return std::min(bits, kAddressBits);
+    return std::min(bits, kMaxAddressBits);
   }
   // Fallback: mmap probe
-  return std::min(DetectWithMmapProbe(), kAddressBits);
+  return std::min(DetectWithMmapProbe(), kMaxAddressBits);
 #else
-  return kAddressBits;
+  return kMaxAddressBits;
 #endif
 }
 

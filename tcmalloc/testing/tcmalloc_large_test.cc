@@ -27,6 +27,7 @@
 #include "gtest/gtest.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/types/span.h"
+#include "tcmalloc/internal/address_bits.h"
 #include "tcmalloc/internal/config.h"
 #include "tcmalloc/internal/logging.h"
 #include "tcmalloc/malloc_extension.h"
@@ -206,10 +207,10 @@ TEST_F(LargeAllocationTest, NearMaxAddressBits) {
 #else
   for (int i = -10; i < -6; ++i) {
 #endif
-    TryAllocMightFail(size_t{1} << (kAddressBits + i));
+    TryAllocMightFail(size_t{1} << (EffectiveAddressBits() + i));
   }
   for (int i = -1; i < 5; ++i) {
-    TryAllocExpectFail(size_t{1} << (kAddressBits + i));
+    TryAllocExpectFail(size_t{1} << (EffectiveAddressBits() + i));
   }
 }
 

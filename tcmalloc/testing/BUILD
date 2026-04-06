@@ -895,6 +895,7 @@ create_tcmalloc_testsuite(
     tags = ["noasan"],
     deps = [
         "//tcmalloc:malloc_extension",
+        "//tcmalloc/internal:address_bits",
         "//tcmalloc/internal:config",
         "//tcmalloc/internal:logging",
         "@com_google_absl//absl/container:flat_hash_set",

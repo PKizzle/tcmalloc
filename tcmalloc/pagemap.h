@@ -649,9 +649,9 @@ class PageMap {
 
  private:
 #ifdef TCMALLOC_USE_PAGEMAP3
-  PageMap3<kAddressBits - kPageShift, MetaDataAlloc> map_;
+  PageMap3<kMaxAddressBits - kPageShift, MetaDataAlloc> map_;
 #else
-  PageMap2<kAddressBits - kPageShift, MetaDataAlloc> map_;
+  PageMap2<kMaxAddressBits - kPageShift, MetaDataAlloc> map_;
 #endif
 };
 

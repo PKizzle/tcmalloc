@@ -31,6 +31,7 @@
 #include "absl/base/internal/spinlock.h"
 #include "absl/base/nullability.h"
 #include "tcmalloc/common.h"
+#include "tcmalloc/internal/address_bits.h"
 #include "tcmalloc/internal/config.h"
 #include "tcmalloc/internal/logging.h"
 #include "tcmalloc/internal/memory_tag.h"
@@ -150,7 +151,7 @@ TEST_F(PageAllocatorTest, Record) {
       }
 
       const Length absurd =
-          Length(uintptr_t{1} << (kAddressBits - 1 - kPageShift));
+          Length(uintptr_t{1} << (EffectiveAddressBits() - 1 - kPageShift));
       for (Length i = kMaxPages + Length(1); i < absurd; i *= 2) {
         ASSERT_EQ(0, info.counts_for(i).nalloc);
         ASSERT_EQ(0, info.counts_for(i).nfree);

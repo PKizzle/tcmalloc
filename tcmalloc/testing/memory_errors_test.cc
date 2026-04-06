@@ -1120,7 +1120,7 @@ TEST_F(TcMallocTest, NeverAllocatedPointerHighBits) {
 
   // Exercises an address that cannot be addressed by the PageMap.
   constexpr uintptr_t kAddress = uintptr_t{0xDEADBEEF0000000};
-  static_assert(absl::bit_width(kAddress) > tcmalloc_internal::kAddressBits);
+  static_assert(absl::bit_width(kAddress) > tcmalloc_internal::kMaxAddressBits);
   void* ptr = absl::bit_cast<void*>(kAddress);
 
   EXPECT_DEATH(
@@ -1161,7 +1161,7 @@ TEST_F(TcMallocTest, ReallocNeverAllocatedPointerHighBits) {
 #endif
 
   constexpr uintptr_t kAddress = uintptr_t{0xDEADBEEF0000000};
-  static_assert(absl::bit_width(kAddress) > tcmalloc_internal::kAddressBits);
+  static_assert(absl::bit_width(kAddress) > tcmalloc_internal::kMaxAddressBits);
   void* ptr = absl::bit_cast<void*>(kAddress);
 
   EXPECT_DEATH(

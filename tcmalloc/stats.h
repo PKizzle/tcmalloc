@@ -230,8 +230,9 @@ class PageAllocInfo {
 
   // Indexed by exact length
   Counts small_[kMaxPages.raw_num()];
-  // Indexed by power-of-two-buckets
-  Counts large_[kAddressBits - kPageShift];
+  // Indexed by power-of-two-buckets.  Sized to the compile-time maximum;
+  // runtime loops use EffectiveAddressBits() as the upper bound.
+  Counts large_[kMaxAddressBits - kPageShift];
   const char* label_;
 
   const int64_t baseline_ticks_{absl::base_internal::CycleClock::Now()};

@@ -32,7 +32,7 @@ namespace tcmalloc_internal {
 namespace {
 
 TEST(AddressBits, CpuVirtualBits) {
-  // Check that kAddressBits is as least as large as either the number of bits
+  // Check that kMaxAddressBits is as least as large as either the number of bits
   // in a pointer or as the number of virtual bits handled by the processor.
   // To be effective this test must be run on each processor model.
 #ifdef __x86_64__
@@ -53,7 +53,7 @@ TEST(AddressBits, CpuVirtualBits) {
   const int kImplementedVirtualBits = (ret >> 8) & ((1 << 8) - 1);
 
   // TODO(b/134686025): Remove 48-bit lower bound.
-  ASSERT_GE(kAddressBits,
+  ASSERT_GE(kMaxAddressBits,
             std::min({48, kImplementedVirtualBits, kPointerBits}));
 #elif __aarch64__
   const int kPointerBits = 8 * sizeof(void*);
@@ -95,11 +95,11 @@ TEST(AddressBits, CpuVirtualBits) {
 
   ASSERT_GE(levels, 3);
   const int kImplementedVirtualBits = 39 + (levels - 3) * 9;
-  // kAddressBits is the compile-time maximum (48 for aarch64).  The runtime
+  // kMaxAddressBits is the compile-time maximum (48 for aarch64).  The runtime
   // EffectiveAddressBits() should match the actual kernel configuration.
-  ASSERT_GE(kAddressBits, kImplementedVirtualBits);
+  ASSERT_GE(kMaxAddressBits, kImplementedVirtualBits);
   ASSERT_EQ(EffectiveAddressBits(), kImplementedVirtualBits);
-  ASSERT_GE(kAddressBits, std::min(kImplementedVirtualBits, kPointerBits));
+  ASSERT_GE(kMaxAddressBits, std::min(kImplementedVirtualBits, kPointerBits));
 #endif
 }
 
