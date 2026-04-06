@@ -115,7 +115,17 @@ GOOGLE_MALLOC_SECTION_BEGIN
 namespace tcmalloc {
 namespace tcmalloc_internal {
 
-#if defined __x86_64__
+// kAddressBits is the compile-time maximum virtual address space size.
+// It is used to size data structures (page maps, bitfields) that must
+// accommodate all possible addresses.  On architectures where the actual
+// virtual address space may be smaller (e.g. aarch64 with 3-level page
+// tables giving only 39 bits), the runtime-detected EffectiveAddressBits()
+// from address_bits.h is used for mmap hints and memory tagging.
+//
+// Users may override this at build time by defining TCMALLOC_ADDRESS_BITS.
+#if defined(TCMALLOC_ADDRESS_BITS)
+inline constexpr int kAddressBits = TCMALLOC_ADDRESS_BITS;
+#elif defined __x86_64__
 // x86_64 processors use lower 48 bits in virtual to physical address
 // translation with 4-level page tables. The top 16 are thus unused.
 // We don't support 5-level page tables yet.
@@ -131,7 +141,10 @@ inline constexpr int kAddressBits = 48;
 inline constexpr int kAddressBits = 49;
 #elif defined __aarch64__ && defined __linux__
 // According to Documentation/arm64/memory.txt of kernel 3.16,
-// AARCH64 kernel supports 48-bit virtual addresses for both user and kernel.
+// AARCH64 kernel supports up to 48-bit virtual addresses for both user and
+// kernel with 4-level page tables.  Kernels with CONFIG_PGTABLE_LEVELS=3
+// only support 39-bit addresses; EffectiveAddressBits() detects this at
+// runtime.
 inline constexpr int kAddressBits = 48;
 #elif defined __riscv && defined __linux__
 inline constexpr int kAddressBits = 48;

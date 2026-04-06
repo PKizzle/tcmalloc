@@ -51,6 +51,19 @@ Architecture, Specific Compiler, and Standard Library implementation.
 \* We test on gcc 9.2, though gcc versions (which support C++17) prior to that
 release should also work.
 
+**AArch64 Notes**
+
+AArch64 kernels may be configured with either 3-level (`CONFIG_PGTABLE_LEVELS=3`,
+39-bit virtual addresses) or 4-level (`CONFIG_PGTABLE_LEVELS=4`, 48-bit virtual
+addresses) page tables.  TCMalloc detects the effective virtual address space
+size at runtime, so a single binary works on both configurations.  The
+compile-time `kAddressBits` (48) is used to size data structures to their
+maximum extent; no recompilation is needed for 39-bit systems.
+
+If you need to force a specific address space size at build time (for example,
+to reduce memory usage of internal data structures), define
+`TCMALLOC_ADDRESS_BITS` when building.
+
 **Best Effort**
 
 <table width="80%">

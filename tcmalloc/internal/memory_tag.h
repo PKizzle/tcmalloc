@@ -18,7 +18,10 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "absl/base/attributes.h"
+#include "absl/base/call_once.h"
 #include "absl/strings/string_view.h"
+#include "tcmalloc/internal/address_bits.h"
 #include "tcmalloc/internal/config.h"
 #include "tcmalloc/internal/logging.h"
 
@@ -40,13 +43,44 @@ enum class MemoryTag : uint8_t {
   kMetadata = 0x3,
 };
 
+// Compile-time tag constants, used for data structure sizing.  These reflect
+// the maximum kAddressBits and are correct on systems with full-size VA space.
 inline constexpr uintptr_t kTagShift = std::min(kAddressBits - 4, 42);
 inline constexpr uintptr_t kTagMask =
     uintptr_t{kSanitizerAddressSpace ? 0x3 : 0x7} << kTagShift;
 
+// Runtime-effective tag configuration, accounting for the actual virtual
+// address space size (which may be smaller than kAddressBits on aarch64
+// systems with 3-level page tables).
+struct TagConfig {
+  uintptr_t shift;
+  uintptr_t mask;
+};
+
+inline const TagConfig& GetEffectiveTagConfig() {
+  ABSL_CONST_INIT static TagConfig config;
+  ABSL_CONST_INIT static absl::once_flag flag;
+  absl::base_internal::LowLevelCallOnce(&flag, [&]() {
+    const int bits = EffectiveAddressBits();
+    config.shift = static_cast<uintptr_t>(std::min(bits - 4, 42));
+    config.mask =
+        uintptr_t{kSanitizerAddressSpace ? 0x3 : 0x7} << config.shift;
+  });
+  return config;
+}
+
+inline uintptr_t EffectiveTagShift() {
+  return GetEffectiveTagConfig().shift;
+}
+
+inline uintptr_t EffectiveTagMask() {
+  return GetEffectiveTagConfig().mask;
+}
+
 inline MemoryTag GetMemoryTag(const void* ptr) {
-  return static_cast<MemoryTag>((reinterpret_cast<uintptr_t>(ptr) & kTagMask) >>
-                                kTagShift);
+  const auto& cfg = GetEffectiveTagConfig();
+  return static_cast<MemoryTag>(
+      (reinterpret_cast<uintptr_t>(ptr) & cfg.mask) >> cfg.shift);
 }
 
 inline bool IsNormalMemory(const void* ptr) {

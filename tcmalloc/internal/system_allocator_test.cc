@@ -129,16 +129,16 @@ INSTANTIATE_TEST_SUITE_P(VariedAlignment, MmapAlignedTest,
                          testing::Values(kSmallButSlowTCMallocPageSize,
                                          kDefaultTCMallocPageSize,
                                          kHugePageSize, kMinMmapAlloc,
-                                         uintptr_t{1} << kTagShift));
+                                         uintptr_t{1} << EffectiveTagShift()));
 
 TEST_P(MmapAlignedTest, CorrectAlignmentAndTag) {
   MmapAndCheck(kHugePageSize, GetParam());
 }
 
-// Ensure mmap sizes near kTagMask still have the correct tag at the beginning
-// and end of the mapping.
+// Ensure mmap sizes near the effective tag mask still have the correct tag at
+// the beginning and end of the mapping.
 TEST_F(MmapAlignedTest, LargeSizeSmallAlignment) {
-  MmapAndCheck(uintptr_t{1} << kTagShift, 1 << 12);
+  MmapAndCheck(uintptr_t{1} << EffectiveTagShift(), 1 << 12);
 }
 
 }  // namespace

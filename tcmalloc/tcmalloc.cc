@@ -70,6 +70,7 @@
 #include <vector>
 
 #include "absl/base/attributes.h"
+#include "absl/base/call_once.h"
 #include "absl/base/casts.h"
 #include "absl/base/const_init.h"
 #include "absl/base/internal/spinlock.h"
@@ -748,20 +749,38 @@ static constexpr uintptr_t kBadDeallocationHighMask =
     ~((uintptr_t{1} << kAddressBits) - 1u);
 static constexpr uintptr_t kBadAlignmentMask =
     static_cast<uintptr_t>(kAlignment) - 1u;
-// kNormalMask covers both kNormal and kNormalP1 because they share an
-// overlapping tag bit.  This is the same property IsNormalMemory relies on.
-static constexpr uintptr_t kNormalMask =
-    static_cast<uintptr_t>(MemoryTag::kNormal) << kTagShift;
-static constexpr uintptr_t kColdMask = static_cast<uintptr_t>(MemoryTag::kCold)
-                                       << kTagShift;
+
 static_assert((static_cast<uintptr_t>(MemoryTag::kNormal) &
                static_cast<uintptr_t>(MemoryTag::kNormalP1)) != 0);
 
-static constexpr uintptr_t kNormalOrBadDeallocationMask =
-    kBadDeallocationHighMask | kNormalMask | kBadAlignmentMask;
+// Deallocation masks that depend on the runtime-detected virtual address space
+// size.  They are computed once on first use so that the free() hot path
+// remains fast (one atomic flag check + struct loads from L1 cache).
+struct DeallocMasks {
+  uintptr_t normal_mask;
+  uintptr_t cold_mask;
+  uintptr_t normal_or_bad_deallocation_mask;
+  uintptr_t tag_or_bad_deallocation_mask;
+};
 
-static constexpr uintptr_t kTagOrBadDeallocationMask =
-    kBadDeallocationHighMask | kTagMask | kBadAlignmentMask;
+static const DeallocMasks& GetDeallocMasks() {
+  ABSL_CONST_INIT static DeallocMasks masks;
+  ABSL_CONST_INIT static absl::once_flag flag;
+  absl::base_internal::LowLevelCallOnce(&flag, [&]() {
+    const uintptr_t tag_shift = EffectiveTagShift();
+    const uintptr_t tag_mask = EffectiveTagMask();
+    // kNormalMask covers both kNormal and kNormalP1 because they share an
+    // overlapping tag bit.  This is the same property IsNormalMemory relies on.
+    masks.normal_mask =
+        static_cast<uintptr_t>(MemoryTag::kNormal) << tag_shift;
+    masks.cold_mask = static_cast<uintptr_t>(MemoryTag::kCold) << tag_shift;
+    masks.normal_or_bad_deallocation_mask =
+        kBadDeallocationHighMask | masks.normal_mask | kBadAlignmentMask;
+    masks.tag_or_bad_deallocation_mask =
+        kBadDeallocationHighMask | tag_mask | kBadAlignmentMask;
+  });
+  return masks;
+}
 
 template <typename Policy>
 ABSL_ATTRIBUTE_NOINLINE static void do_unsized_free_irregular(void* ptr,
@@ -801,8 +820,9 @@ inline ABSL_ATTRIBUTE_ALWAYS_INLINE void do_free(void* ptr, Policy policy) {
   // slightly slower path to handle those, in order to look for clearly
   // erroneous pointers.
   const uintptr_t uptr = absl::bit_cast<uintptr_t>(ptr);
-  if (ABSL_PREDICT_FALSE((uptr & kNormalOrBadDeallocationMask) !=
-                         kNormalMask)) {
+  const auto& dm = GetDeallocMasks();
+  if (ABSL_PREDICT_FALSE((uptr & dm.normal_or_bad_deallocation_mask) !=
+                         dm.normal_mask)) {
     if (ABSL_PREDICT_TRUE(ptr == nullptr)) {
       return;
     }
@@ -891,12 +911,13 @@ inline ABSL_ATTRIBUTE_ALWAYS_INLINE void do_free_with_size(void* ptr,
   // whose deletions trigger more operations and require to visit metadata.
   const uintptr_t uptr = absl::bit_cast<uintptr_t>(ptr);
 
-  if (ABSL_PREDICT_FALSE((uptr & kNormalOrBadDeallocationMask) !=
-                         kNormalMask)) {
+  const auto& dm = GetDeallocMasks();
+  if (ABSL_PREDICT_FALSE((uptr & dm.normal_or_bad_deallocation_mask) !=
+                         dm.normal_mask)) {
     if (ABSL_PREDICT_FALSE(ptr == nullptr)) {
       return;
     }
-    bool is_cold = ((uptr & kTagOrBadDeallocationMask) == kColdMask);
+    bool is_cold = ((uptr & dm.tag_or_bad_deallocation_mask) == dm.cold_mask);
     if (ABSL_PREDICT_FALSE(!is_cold)) {
       // Outline cold path to avoid putting cold size lookup on the fast path.
       SLOW_PATH_BARRIER();

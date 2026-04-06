@@ -169,21 +169,21 @@ class FakeStaticForwarder {
 
     AddressRange ret{
         reinterpret_cast<void*>(aligned_allocation |
-                                (static_cast<uintptr_t>(tag) << kTagShift)),
+                                (static_cast<uintptr_t>(tag) << EffectiveTagShift())),
         bytes};
     return ret;
   }
 
   void Back(Range r) {
     const uintptr_t start =
-        reinterpret_cast<uintptr_t>(r.p.start_addr()) & ~kTagMask;
+        reinterpret_cast<uintptr_t>(r.p.start_addr()) & ~EffectiveTagMask();
     const uintptr_t end = start + r.n.in_bytes();
     TC_CHECK_LE(end, fake_allocation_);
   }
 
   [[nodiscard]] MemoryModifyStatus ReleasePages(Range r) {
     const uintptr_t start =
-        reinterpret_cast<uintptr_t>(r.p.start_addr()) & ~kTagMask;
+        reinterpret_cast<uintptr_t>(r.p.start_addr()) & ~EffectiveTagMask();
     const uintptr_t end = start + r.n.in_bytes();
     TC_CHECK_LE(end, fake_allocation_);
 

@@ -86,6 +86,32 @@ cc_test(
 )
 
 cc_library(
+    name = "address_bits",
+    srcs = ["address_bits.cc"],
+    hdrs = ["address_bits.h"],
+    copts = TCMALLOC_DEFAULT_COPTS,
+    visibility = [
+        "//tcmalloc:__subpackages__",
+    ],
+    deps = [
+        ":config",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/base:core_headers",
+    ],
+)
+
+cc_test(
+    name = "address_bits_test",
+    srcs = ["address_bits_test.cc"],
+    copts = TCMALLOC_DEFAULT_COPTS,
+    deps = [
+        ":address_bits",
+        ":config",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "atomic_danger",
     hdrs = ["atomic_danger.h"],
     copts = TCMALLOC_DEFAULT_COPTS,
@@ -151,6 +177,7 @@ cc_test(
     srcs = ["config_test.cc"],
     copts = TCMALLOC_DEFAULT_COPTS,
     deps = [
+        ":address_bits",
         ":config",
         ":util",
         "@com_google_absl//absl/strings",
@@ -404,9 +431,12 @@ cc_library(
         "//tcmalloc:__subpackages__",
     ],
     deps = [
+        ":address_bits",
         ":config",
         ":logging",
         ":optimization",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/strings:string_view",
     ],
 )

@@ -24,6 +24,7 @@
 #include "absl/strings/str_cat.h"
 #include "google/protobuf/io/gzip_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl.h"
+#include "tcmalloc/internal/address_bits.h"
 #include "tcmalloc/internal/util.h"
 
 namespace tcmalloc {
@@ -94,7 +95,10 @@ TEST(AddressBits, CpuVirtualBits) {
 
   ASSERT_GE(levels, 3);
   const int kImplementedVirtualBits = 39 + (levels - 3) * 9;
-  ASSERT_EQ(kAddressBits, kImplementedVirtualBits);
+  // kAddressBits is the compile-time maximum (48 for aarch64).  The runtime
+  // EffectiveAddressBits() should match the actual kernel configuration.
+  ASSERT_GE(kAddressBits, kImplementedVirtualBits);
+  ASSERT_EQ(EffectiveAddressBits(), kImplementedVirtualBits);
   ASSERT_GE(kAddressBits, std::min(kImplementedVirtualBits, kPointerBits));
 #endif
 }

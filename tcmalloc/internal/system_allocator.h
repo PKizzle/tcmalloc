@@ -275,6 +275,14 @@ template <>
 ABSL_ATTRIBUTE_UNUSED inline void CheckAddressBits<8 * sizeof(void*)>(
     uintptr_t ptr) {}
 
+// Runtime version of CheckAddressBits using EffectiveAddressBits().
+inline void CheckEffectiveAddressBits(uintptr_t ptr) {
+  const int bits = EffectiveAddressBits();
+  if (bits < 8 * static_cast<int>(sizeof(void*))) {
+    TC_ASSERT_EQ(ptr >> bits, 0);
+  }
+}
+
 static_assert(kAddressBits <= 8 * sizeof(void*),
               "kAddressBits must be smaller than the pointer size");
 
@@ -309,7 +317,7 @@ AddressRange SystemAllocator<Topology, NormalPartitions>::Allocate(
   auto [result, actual_bytes] = AllocateFromRegion(bytes, alignment, tag);
 
   if (result != nullptr) {
-    system_allocator_internal::CheckAddressBits<kAddressBits>(
+    system_allocator_internal::CheckEffectiveAddressBits(
         reinterpret_cast<uintptr_t>(result) + actual_bytes - 1);
     TC_ASSERT_EQ(GetMemoryTag(result), tag);
   }
@@ -422,11 +430,12 @@ SystemAllocator<Topology, NormalPartitions>::AllocateFromRegion(
     size_t request_size, size_t alignment, const MemoryTag tag) {
   using system_allocator_internal::RoundUp;
 
-  constexpr uintptr_t kTagFree = uintptr_t{1} << kTagShift;
+  const uintptr_t effective_tag_free = uintptr_t{1} << EffectiveTagShift();
 
-  // We do not support size or alignment larger than kTagFree.
+  // We do not support size or alignment larger than the tag region size.
   // TODO(b/141325493): Handle these large allocations.
-  if (request_size > kTagFree || alignment > kTagFree) return {nullptr, 0};
+  if (request_size > effective_tag_free || alignment > effective_tag_free)
+    return {nullptr, 0};
 
   // If we are dealing with large sizes, or large alignments we do not
   // want to throw away the existing reserved region, so instead we
@@ -507,8 +516,8 @@ void* SystemAllocator<Topology, NormalPartitions>::MmapAlignedLocked(
     size_t size, size_t alignment, const MemoryTag tag) {
   using system_allocator_internal::MapFixedNoReplaceFlagAvailable;
 
-  TC_ASSERT_LE(size, kTagMask);
-  TC_ASSERT_LE(alignment, kTagMask);
+  TC_ASSERT_LE(size, EffectiveTagMask());
+  TC_ASSERT_LE(alignment, EffectiveTagMask());
 
   std::optional<int> numa_partition;
   uintptr_t& next_addr =
@@ -562,8 +571,8 @@ void* SystemAllocator<Topology, NormalPartitions>::MmapAlignedLocked(
       }
       // Attempt to keep the next mmap contiguous in the common case.
       next_addr += size;
-      TC_CHECK(kAddressBits == std::numeric_limits<uintptr_t>::digits ||
-               next_addr <= uintptr_t{1} << kAddressBits);
+      TC_CHECK(EffectiveAddressBits() == std::numeric_limits<uintptr_t>::digits ||
+               next_addr <= uintptr_t{1} << EffectiveAddressBits());
 
       TC_ASSERT_EQ(reinterpret_cast<uintptr_t>(result) & (alignment - 1), 0);
       // Give the mmaped region a name based on its tag.
@@ -598,8 +607,8 @@ void* SystemAllocator<Topology, NormalPartitions>::MmapAlignedLocked(
         "Note: the allocation may have failed because TCMalloc assumes a "
         "%u-bit virtual address space size; you may need to rebuild TCMalloc "
         "with TCMALLOC_ADDRESS_BITS defined to your system's virtual address "
-        "space size",
-        kAddressBits);
+        "space size (detected effective bits: %d)",
+        kAddressBits, EffectiveAddressBits());
   }
   return nullptr;
 }
@@ -784,12 +793,14 @@ uintptr_t SystemAllocator<Topology, NormalPartitions>::RandomMmapHint(
   //
   //  *  Below that, the top highest the hardware allows us to use, since it is
   //     reserved for kernel space addresses.
-  constexpr uintptr_t kAddrMask = (uintptr_t{1} << (kAddressBits - 1)) - 1;
+  const uintptr_t kAddrMask =
+      (uintptr_t{1} << (EffectiveAddressBits() - 1)) - 1;
 #else
   // MSan and TSan use up all of the lower address space, so we allow use of
   // mid-upper address space when they're active.  This only matters for
   // TCMalloc-internal tests, since sanitizers install their own malloc/free.
-  constexpr uintptr_t kAddrMask = (uintptr_t{0xF} << (kAddressBits - 5)) - 1;
+  const uintptr_t kAddrMask =
+      (uintptr_t{0xF} << (EffectiveAddressBits() - 5)) - 1;
 #endif
 
   // Ensure alignment >= size so we're guaranteed the full mapping has the same
@@ -797,8 +808,9 @@ uintptr_t SystemAllocator<Topology, NormalPartitions>::RandomMmapHint(
   alignment = absl::bit_ceil(std::max(alignment, size));
 
   rnd_ = ExponentialBiased::NextRandom(rnd_);
-  uintptr_t addr = rnd_ & kAddrMask & ~(alignment - 1) & ~kTagMask;
-  addr |= static_cast<uintptr_t>(tag) << kTagShift;
+  uintptr_t addr =
+      rnd_ & kAddrMask & ~(alignment - 1) & ~EffectiveTagMask();
+  addr |= static_cast<uintptr_t>(tag) << EffectiveTagShift();
 
 #if defined(ABSL_HAVE_THREAD_SANITIZER)
 #if defined(__x86_64__)
@@ -832,8 +844,8 @@ uintptr_t SystemAllocator<Topology, NormalPartitions>::RandomMmapHint(
 
   for (int i = 0; i < 10 && !reserved_for_app(addr); ++i) {
     rnd_ = ExponentialBiased::NextRandom(rnd_);
-    addr = rnd_ & kHiAppMask & ~(alignment - 1) & ~kTagMask;
-    addr |= static_cast<uintptr_t>(tag) << kTagShift;
+    addr = rnd_ & kHiAppMask & ~(alignment - 1) & ~EffectiveTagMask();
+    addr |= static_cast<uintptr_t>(tag) << EffectiveTagShift();
   }
 #endif
 
